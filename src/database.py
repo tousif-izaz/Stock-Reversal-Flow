@@ -49,7 +49,15 @@ class StockDatabase:
     def insert_stock_data(self, df: pd.DataFrame):
         """Insert stock data DataFrame into database"""
         with sqlite3.connect(self.db_path) as conn:
-            df.to_sql('stock_data', conn, if_exists='replace', index=False)
+            # Delete existing data for this symbol and timeframe first
+            if not df.empty:
+                symbol = df.iloc[0]['symbol']
+                timeframe = df.iloc[0]['timeframe']
+                conn.execute('DELETE FROM stock_data WHERE symbol = ? AND timeframe = ?', (symbol, timeframe))
+            
+            # Insert new data
+            df.to_sql('stock_data', conn, if_exists='append', index=False)
+            conn.commit()
     
     def get_stock_data(self, symbol: str, timeframe: str = 'daily', limit: Optional[int] = None) -> pd.DataFrame:
         """Retrieve stock data for a specific symbol"""
@@ -104,19 +112,19 @@ class StockDatabase:
     
     def get_symbols_needing_update(self, hours_threshold: int = 1) -> List[str]:
         """Get symbols that haven't been updated in the specified hours"""
-        query = '''
-            SELECT w.symbol 
-            FROM (SELECT ? as symbol) w
-            LEFT JOIN data_updates d ON w.symbol = d.symbol
-            WHERE d.last_update IS NULL 
-            OR datetime(d.last_update) < datetime('now', '-{} hours')
-        '''.format(hours_threshold)
+        from config.settings import WATCHLIST
         
         with sqlite3.connect(self.db_path) as conn:
-            from config.settings import WATCHLIST
-            symbols = []
+            symbols_needing_update = []
+            
             for symbol in WATCHLIST:
+                query = '''
+                    SELECT last_update FROM data_updates 
+                    WHERE symbol = ? AND datetime(last_update) >= datetime('now', '-{} hours')
+                '''.format(hours_threshold)
+                
                 result = conn.execute(query, (symbol,)).fetchone()
-                if result:
-                    symbols.append(symbol)
-            return symbols
+                if not result:
+                    symbols_needing_update.append(symbol)
+            
+            return symbols_needing_update

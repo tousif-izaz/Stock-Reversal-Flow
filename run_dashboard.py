@@ -14,10 +14,9 @@ def main():
     project_root = Path(__file__).parent
     os.chdir(project_root)
     
-    # Add src directory to Python path
-    src_path = project_root / "src"
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
+    # Add project root to Python path for imports
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
     
     # Check if .env file exists
     env_file = project_root / ".env"
@@ -28,7 +27,7 @@ def main():
         print()
     
     # Launch Streamlit dashboard
-    dashboard_path = src_path / "dashboard.py"
+    dashboard_path = project_root / "src" / "dashboard.py"
     
     print("🚀 Launching Stock Reversal Flow Dashboard...")
     print("📊 Dashboard will open in your default browser")

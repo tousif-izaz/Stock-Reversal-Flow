@@ -3,8 +3,17 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
-from database import StockDatabase
-from data_collector import PolygonDataCollector
+import sys
+import os
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+os.chdir(project_root)
+
+from src.database import StockDatabase
+from src.data_collector import PolygonDataCollector
 from config.settings import WATCHLIST, OVERSOLD_THRESHOLD, MIN_DECLINE_PERCENT
 
 # Page configuration
@@ -18,20 +27,41 @@ st.set_page_config(
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_stock_data(symbol: str, limit: int = 100):
     """Load stock data from database with caching"""
-    db = StockDatabase()
-    return db.get_stock_data(symbol, limit=limit)
+    try:
+        db = StockDatabase()
+        data = db.get_stock_data(symbol, limit=limit)
+        if not data.empty:
+            st.write(f"Debug: Loaded {len(data)} records for {symbol}")
+        else:
+            st.write(f"Debug: No data found for {symbol} in database")
+        return data
+    except Exception as e:
+        st.error(f"Error loading data for {symbol}: {str(e)}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def load_oversold_stocks():
     """Load oversold stocks with caching"""
-    db = StockDatabase()
-    return db.get_oversold_stocks()
+    try:
+        db = StockDatabase()
+        data = db.get_oversold_stocks()
+        st.write(f"Debug: Found {len(data)} oversold stocks")
+        return data
+    except Exception as e:
+        st.error(f"Error loading oversold stocks: {str(e)}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def load_all_latest_data():
     """Load latest data for all stocks"""
-    db = StockDatabase()
-    return db.get_all_latest_data()
+    try:
+        db = StockDatabase()
+        data = db.get_all_latest_data()
+        st.write(f"Debug: Loaded latest data for {len(data)} stocks")
+        return data
+    except Exception as e:
+        st.error(f"Error loading all latest data: {str(e)}")
+        return pd.DataFrame()
 
 def create_candlestick_chart(df: pd.DataFrame, symbol: str):
     """Create candlestick chart with indicators"""
@@ -138,10 +168,48 @@ def display_stock_metrics(df: pd.DataFrame):
             rsi_color = "red" if latest['rsi'] < OVERSOLD_THRESHOLD else "normal"
             st.metric("RSI", f"{latest['rsi']:.1f}")
 
+def check_database_status():
+    """Check if database has any data"""
+    try:
+        import sqlite3
+        db = StockDatabase()
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM stock_data")
+            total_records = cursor.fetchone()[0]
+            
+            cursor = conn.execute("SELECT COUNT(DISTINCT symbol) FROM stock_data") 
+            unique_symbols = cursor.fetchone()[0]
+            
+            cursor = conn.execute("SELECT symbol, COUNT(*) as records FROM stock_data GROUP BY symbol LIMIT 10")
+            sample_data = cursor.fetchall()
+            
+            return {
+                'total_records': total_records,
+                'unique_symbols': unique_symbols,
+                'sample_data': sample_data,
+                'db_path': db.db_path
+            }
+    except Exception as e:
+        return {'error': str(e)}
+
 def main():
     """Main dashboard function"""
     st.title("📈 Stock Reversal Flow Dashboard")
     st.markdown("Monitor overextended stocks and potential reversal opportunities")
+    
+    # Database status check
+    with st.expander("🔍 Database Status (Debug)", expanded=False):
+        status = check_database_status()
+        if 'error' in status:
+            st.error(f"Database Error: {status['error']}")
+        else:
+            st.write(f"**Database Path:** {status['db_path']}")
+            st.write(f"**Total Records:** {status['total_records']}")
+            st.write(f"**Unique Symbols:** {status['unique_symbols']}")
+            if status['sample_data']:
+                st.write("**Sample Data:**")
+                for symbol, count in status['sample_data']:
+                    st.write(f"- {symbol}: {count} records")
     
     # Sidebar
     st.sidebar.header("Controls")

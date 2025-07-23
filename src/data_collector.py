@@ -4,12 +4,21 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import ta
+import sys
+import os
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+os.chdir(project_root)
+
 from config.settings import (
     POLYGON_API_KEY, POLYGON_BASE_URL, WATCHLIST,
     RSI_PERIOD, SMA_PERIOD, OVERSOLD_THRESHOLD,
     MIN_DECLINE_PERCENT, DECLINE_LOOKBACK_DAYS
 )
-from database import StockDatabase
+from src.database import StockDatabase
 
 class PolygonDataCollector:
     def __init__(self):
